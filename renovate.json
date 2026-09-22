@@ -1,0 +1,25 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["images/[^/]+/Dockerfile$"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[^ ]+) depName=(?<depName>[^ ]+)( extractVersion=(?<extractVersion>[^ ]+))?( versioning=(?<versioning>[^ ]+))?\nARG \\w+VERSION=(?<currentValue>.+)"
+      ]
+    },
+    {
+      "customType": "regex",
+      "fileMatch": ["^\\.github/workflows/ci\\.yml$"],
+      "matchStrings": [
+        "build-args: (?:\\w+=[^ ]+ )?RUBY_VERSION=(?<currentValue>[^ \\n]+)"
+      ],
+      "datasourceTemplate": "github-tags",
+      "depNameTemplate": "Shopify/ruby-definitions",
+      "versioningTemplate": "regex:^v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-pshopify(?<build>\\d+)$"
+    }
+  ]
+}

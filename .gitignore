@@ -1,0 +1,15 @@
+# Editor / OS
+.DS_Store
+*.swp
+*~
+
+# Lefthook
+.lefthook/
+
+# Agent session state
+.claude/
+.agents/
+
+# Build artifacts
+*.tar
+*.tar.gz

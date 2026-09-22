@@ -1,0 +1,592 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '37 * * * *' # Every hour
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-ruby-34:
+    name: Ruby 3.4
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    if: |
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build dev image
+        uses: docker/build-push-action@v6
+        with:
+          context: images/ruby
+          file: images/ruby/Dockerfile
+          target: dev
+          build-args: RUBY_VERSION=3.4.10-pshopify1
+          load: true
+          tags: ruby-dev:validate
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: images/ruby
+          file: images/ruby/Dockerfile
+          target: runtime
+          build-args: RUBY_VERSION=3.4.10-pshopify1
+          load: true
+          tags: ruby:validate
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan dev image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ruby-dev:validate
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Scan runtime image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ruby:validate
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Login to GHCR
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish dev image
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: images/ruby
+          file: images/ruby/Dockerfile
+          target: dev
+          build-args: RUBY_VERSION=3.4.10-pshopify1
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/ruby:3.4-dev
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Publish runtime image
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: images/ruby
+          file: images/ruby/Dockerfile
+          target: runtime
+          build-args: RUBY_VERSION=3.4.10-pshopify1
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/ruby:3.4
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-ruby-40:
+    name: Ruby 4.0
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    if: |
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build dev image
+        uses: docker/build-push-action@v6
+        with:
+          context: images/ruby
+          file: images/ruby/Dockerfile
+          target: dev
+          build-args: RUBY_VERSION=4.0.6-pshopify2
+          load: true
+          tags: ruby-4.0-dev:validate
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: images/ruby
+          file: images/ruby/Dockerfile
+          target: runtime
+          build-args: RUBY_VERSION=4.0.6-pshopify2
+          load: true
+          tags: ruby-4.0:validate
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan dev image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ruby-4.0-dev:validate
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Scan runtime image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ruby-4.0:validate
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Login to GHCR
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish dev image
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: images/ruby
+          file: images/ruby/Dockerfile
+          target: dev
+          build-args: RUBY_VERSION=4.0.6-pshopify2
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/ruby:4.0-dev
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/ruby:dev
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Publish runtime image
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: images/ruby
+          file: images/ruby/Dockerfile
+          target: runtime
+          build-args: RUBY_VERSION=4.0.6-pshopify2
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/ruby:4.0
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/ruby:latest
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-go-126:
+    name: Go 1.26
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    if: |
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build dev image
+        uses: docker/build-push-action@v6
+        with:
+          context: images/go
+          file: images/go/Dockerfile
+          target: dev
+          build-args: GO_VERSION=1.26.8
+          load: true
+          tags: go-1.26-dev:validate
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: images/go
+          file: images/go/Dockerfile
+          target: runtime
+          load: true
+          tags: go-1.26:validate
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan dev image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: go-1.26-dev:validate
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Scan runtime image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: go-1.26:validate
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Login to GHCR
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish dev image
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: images/go
+          file: images/go/Dockerfile
+          target: dev
+          build-args: GO_VERSION=1.26.8
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/go:1.26-dev
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Publish runtime image
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: images/go
+          file: images/go/Dockerfile
+          target: runtime
+          build-args: GO_VERSION=1.26.8
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/go:1.26
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-go-127:
+    name: Go 1.27
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    if: |
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build dev image
+        uses: docker/build-push-action@v6
+        with:
+          context: images/go
+          file: images/go/Dockerfile
+          target: dev
+          build-args: GO_VERSION=1.27.1
+          load: true
+          tags: go-1.27-dev:validate
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: images/go
+          file: images/go/Dockerfile
+          target: runtime
+          load: true
+          tags: go-1.27:validate
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan dev image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: go-1.27-dev:validate
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Scan runtime image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: go-1.27:validate
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Login to GHCR
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish dev image
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: images/go
+          file: images/go/Dockerfile
+          target: dev
+          build-args: GO_VERSION=1.27.1
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/go:1.27-dev
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/go:dev
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Publish runtime image
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: images/go
+          file: images/go/Dockerfile
+          target: runtime
+          build-args: GO_VERSION=1.27.1
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/go:1.27
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/go:latest
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-node:
+    name: Node 24
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    if: |
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build dev image
+        uses: docker/build-push-action@v6
+        with:
+          context: images/node
+          file: images/node/Dockerfile
+          target: dev
+          load: true
+          tags: node-dev:validate
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: images/node
+          file: images/node/Dockerfile
+          target: runtime
+          load: true
+          tags: node:validate
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan dev image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: node-dev:validate
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Scan runtime image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: node:validate
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Login to GHCR
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish dev image
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: images/node
+          file: images/node/Dockerfile
+          target: dev
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/node:24-dev
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/node:dev
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Publish runtime image
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: images/node
+          file: images/node/Dockerfile
+          target: runtime
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/node:24
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/node:latest
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-bun:
+    name: Bun
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    if: |
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build dev image
+        uses: docker/build-push-action@v6
+        with:
+          context: images/bun
+          file: images/bun/Dockerfile
+          target: dev
+          load: true
+          tags: bun-dev:validate
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: images/bun
+          file: images/bun/Dockerfile
+          target: runtime
+          load: true
+          tags: bun:validate
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan dev image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: bun-dev:validate
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Scan runtime image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: bun:validate
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Login to GHCR
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish dev image
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: images/bun
+          file: images/bun/Dockerfile
+          target: dev
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/bun:1.4-dev
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/bun:dev
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Publish runtime image
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: images/bun
+          file: images/bun/Dockerfile
+          target: runtime
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/bun:1.4
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/base-images/bun:latest
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
